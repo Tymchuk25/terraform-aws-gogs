@@ -1,5 +1,14 @@
 data "aws_caller_identity" "current" {}
 
+data "kubernetes_service" "nginx_ingress" {
+  metadata {
+    name      = "ingress-nginx-controller"
+    namespace = "ingress-nginx"
+  }
+
+  depends_on = [helm_release.nginx_ingress]
+}
+
 // VPC module
 module "vpc" {
   source = "./modules/vpc"
@@ -39,7 +48,7 @@ module "eks" {
         min_size = 1
         max_size = 1
         desired_size = 1
-        instance_types = ["t2.micro"]
+        instance_types = ["t3.small"]
     }
   }
 
@@ -113,7 +122,8 @@ module "rds" {
   multi_az = var.multi_az
   publicly_accessible = var.publicly_accessible
   backup_retention_period = var.backup_retention_period
-  deletion_protection = true
+  deletion_protection = false
+  skip_final_snapshot = true
 
   create_db_subnet_group = false
   db_subnet_group_name = aws_db_subnet_group.rds_subnet_group.name
@@ -141,5 +151,46 @@ resource "helm_release" "nginx_ingress" {
     name = "service.type"
     value = "LoadBalancer"
   }
+  timeout    = 600
   depends_on = [module.eks]
+}
+
+# resource "kubernetes_namespace" "gogs" {
+#   metadata {
+#     name = "gogs"
+
+#     labels = {
+#       "app.kubernetes.io/managed-by" = "Helm"
+#     }
+
+#     annotations = {
+#       "meta.helm.sh/release-name"      = "gogs"
+#       "meta.helm.sh/release-namespace" = "gogs"
+#     }
+#   }
+
+      
+# }
+
+resource "helm_release" "gogs" {
+  name = "gogs"
+  chart = "${path.module}/charts/helm-gogs"
+  namespace = "gogs"
+  create_namespace = true
+
+  set { 
+    name = "env.DB_HOST"
+    value = module.rds.db_instance_endpoint
+  }
+
+  set {
+    name = "env.GOGS_EXTERNAL_URL"
+    value = "http://${data.kubernetes_service.nginx_ingress.status[0].load_balancer[0].ingress[0].hostname}"
+  }
+
+  depends_on = [
+   // kubernetes_namespace.gogs,
+    helm_release.nginx_ingress,
+    module.rds
+  ]
 }
