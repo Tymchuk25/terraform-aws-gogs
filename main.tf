@@ -155,23 +155,6 @@ resource "helm_release" "nginx_ingress" {
   depends_on = [module.eks]
 }
 
-# resource "kubernetes_namespace" "gogs" {
-#   metadata {
-#     name = "gogs"
-
-#     labels = {
-#       "app.kubernetes.io/managed-by" = "Helm"
-#     }
-
-#     annotations = {
-#       "meta.helm.sh/release-name"      = "gogs"
-#       "meta.helm.sh/release-namespace" = "gogs"
-#     }
-#   }
-
-      
-# }
-
 resource "helm_release" "gogs" {
   name = "gogs"
   chart = "${path.module}/charts/helm-gogs"
@@ -189,7 +172,6 @@ resource "helm_release" "gogs" {
   }
 
   depends_on = [
-   // kubernetes_namespace.gogs,
     helm_release.nginx_ingress,
     module.rds
   ]
